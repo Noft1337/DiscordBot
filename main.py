@@ -8,11 +8,13 @@ cp C:\ProgramData\chocolatey\bin\ffmpeg.exe %APPDATA%\..\Local\Programs\Python39
 of course it will vary depending on your python version
 """
 
+with open(r'.\Token.txt', 'r') as file:
+    TOKEN = file.read()
 cog = [music]
 client = commands.Bot(command_prefix='?', intents = discord.Intents.all())
 
 for i in range(len(cog)):
     cog[i].setup(client)
 
-client.run("MTAwNzY5NTE3MzM3Mjg3MDcxNw.G1tRMu.QTQPW2vPYi6Uv1uF36t0cOAvmj8driDFW9fm08")
+client.run(TOKEN)
 

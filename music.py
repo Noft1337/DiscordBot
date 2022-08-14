@@ -76,15 +76,17 @@ class Music(commands.Cog):
             await self.join(ctx)
         else:
             ctx.voice_client.stop()
-        FMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
-        YDL_OPTIONS = {'format': 'bestaudio'}
+        ffmpeg_options = {
+            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+            'options': '-vn'
+        }
+        ydl_options = {'format': 'bestaudio'}
         vc = ctx.voice_client
 
-        with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
+        with youtube_dl.YoutubeDL(ydl_options) as ydl:
             info = ydl.extract_info(url, download=False)
             url2 = info['formats'][0]['url']
-            print(url2, info)
-            source = await discord.FFmpegOpusAudio.from_probe(url2, **FMPEG_OPTIONS)
+            source = await discord.FFmpegOpusAudio.from_probe(url2, **ffmpeg_options)
             vc.play(source)
 
     @commands.command(name="pause", pass_ctx=True)
