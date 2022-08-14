@@ -91,13 +91,19 @@ class Music(commands.Cog):
 
     @commands.command(name="pause", pass_ctx=True)
     async def pause(self, ctx):
-        await ctx.voice_client.pause()
-        await ctx.send("Ok, pausing.")
+        try:
+            await ctx.voice_client.pause()
+            await ctx.send("Ok, pausing.")
+        except TypeError:
+            pass
 
     @commands.command(name="resume", pass_ctx=True)
     async def resume(self, ctx):
-        await ctx.voice_client.resume()
-        await ctx.send("Ok, resuming.")
+        try:
+            await ctx.voice_client.resume()
+            await ctx.send("Ok, resuming.")
+        except TypeError:
+            pass
 
 
 def setup(client):
