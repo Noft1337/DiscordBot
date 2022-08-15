@@ -3,15 +3,24 @@ from discord.ext import commands
 import youtube_dl
 import time
 from Variables import *
+import threading
+import asyncio
 
 
 class Music(commands.Cog):
 
-    # todo: Add queue function, skipping function
+    """
+        todo:
+            v queue function
+            - searching music via youtube (make it show the top 5 results),
+            - skipping function,
+            - stop clears queue
+    """
 
     def __init__(self, client: commands.Bot):
         self.client = client
         self.queue = []
+        self.thread = False
 
     def check_q(self):
         return len(self.queue) > 0
@@ -32,7 +41,6 @@ class Music(commands.Cog):
     @staticmethod
     def is_connected(ctx: discord.ext.commands.context.Context):
         connected = ctx.voice_client and ctx.voice_client.is_connected()
-        print(f"Connected to voice channel: {ctx.voice_client and ctx.voice_client.is_connected()}")
         return True if connected else False
 
     @commands.command(name="disconnect", pass_ctx=True)
@@ -75,17 +83,13 @@ class Music(commands.Cog):
         voice = self.get_voice(ctx)
         return voice.is_playing()
 
-    def add_to_queue(self, url):
-        self.queue.append(url)
-
     async def handle_connected(self, ctx: discord.ext.commands.context.Context):
         if not self.is_connected(ctx):
             await ctx.send("Joining channel.")
             await self.join(ctx)
 
-    async def handle_queue(self, ctx: discord.ext.commands.context.Context, url):
-        await ctx.send("Added song to the queue.")
-        self.add_to_queue(url)
+    async def send_playing(self, ctx: discord.ext.commands.context.Context):
+        await ctx.send("Added to queue.") if self.is_playing(ctx) else await ctx.send("The song will be played now")
 
     @staticmethod
     async def get_audio(url):
@@ -96,48 +100,42 @@ class Music(commands.Cog):
             source = await discord.FFmpegOpusAudio.from_probe(url2, **FFMPEG_OPTIONS)
         return source
 
-    async def get_first_in_q(self, ctx: discord.ext.commands.context.Context):
-        if self.check_q():
-            source = await self.get_audio(self.queue.pop(0))
-            return source
+    async def idle_speaker(self, ctx: discord.ext.commands.context.Context):
+        self.thread = True
+        while self.is_playing(ctx):
+            time.sleep(1)
+        self.thread = False
+        await self.play_queue(ctx)
 
-    async def play_q(self, ctx: discord.ext.commands.context.Context):
-        while len(self.queue) > 0:
-            if self.is_playing(ctx):
-                time.sleep(1)
-            else:
-                await self.stop_playing(ctx)
-                time.sleep(3)
-                ctx.voice_client.play(await self.get_first_in_q(ctx))
+    def wait_for_idle(self, ctx: discord.ext.commands.context.Context):
+        self.thread = True
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        loop.run_until_complete(self.idle_speaker(ctx))
+        loop.close()
+        self.thread = False
+
+    async def play_queue(self, ctx: discord.ext.commands.context.Context):
+        if not self.is_playing(ctx):
+            audio = await self.get_audio(self.queue.pop(0))
+            ctx.voice_client.play(audio)
+
+        if len(self.queue) > 0:
+            playing_t = threading.Thread(target=self.wait_for_idle, name="Song_Listener", args=[ctx])
+            playing_t.start()
 
     @commands.command(name="play", pass_ctx=True)
-    async def play(self, ctx: discord.ext.commands.context.Context, url="", queue=False):
-        """
-        every song I command playing enters a queue and the command actually plays the next song in queue,
-        no matter if the queue is empty or not.
-        in the end I will add the next condition
-
-        `if len(self.queue) > 0:
-            await self.play(ctx, self.queue.pop(0), queued=True)`
-
-        which will recurse the function until the queue is empty.
-        now all I need is to make the bot wait for the current song to finish playing and while it waits it needs to
-        be able to receive commands too.
-        """
+    async def play(self, ctx: discord.ext.commands.context.Context, url=""):
         await self.handle_connected(ctx)
-        if self.is_playing(ctx):
-            await self.handle_queue(ctx, url)
-            await self.play_q(ctx)
-            return False
-        else:
-            vc = ctx.voice_client
-            source = await self.get_audio(url)
-            if self.is_playing(ctx):
-                time.sleep(1)
-                await self.play(ctx, url)
-            else:
-                vc.play(source)
-            return True
+        self.queue.append(url)
+        print(self.queue, self.is_playing(ctx))
+
+        # send a message to inform that a song has been queued or being played
+        await self.send_playing(ctx)
+        if not self.thread:
+            await self.play_queue(ctx)
 
     @commands.command(name="oklesgo", pass_ctx=True)
     async def oklesgo(self, ctx: discord.ext.commands.context.Context):
