@@ -2,45 +2,7 @@ import discord
 from discord.ext import commands
 import youtube_dl
 import time
-
-FFMPEG_OPTIONS = {
-            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-            'options': '-vn'
-        }
-YDL_OPTIONS = {'format': 'bestaudio'}
-
-OK = "https://www.youtube.com/watch?v=GD9QURJd6qA&ab_channel=SvenBalthazard"
-
-t1 = u'https://www.youtube.com/watch?v=rfT6IhY_eUM&ab_channel=SLOplayz'
-t2 = u'https://www.youtube.com/watch?v=MU_ZhdCy9-8&ab_channel=AnimeKURO'
-
-OPS = {
-    "1": u"https://www.youtube.com/watch?v=HRaoYuRKBaA",
-    "2": u"https://www.youtube.com/watch?v=54dp8ucsGG8",
-    "3": u"https://www.youtube.com/watch?v=x1_sHTEEmik",
-    "4": u"https://www.youtube.com/watch?v=AYhIPAs8JTU",
-    "5": u"https://www.youtube.com/watch?v=RO_VGv4GT9k",
-    "6": u"https://www.youtube.com/watch?v=Tyr7Ymbtl2Y",
-    "7": u"https://www.youtube.com/watch?v=U-1rNzn1w6o",
-    "8": u"https://www.youtube.com/watch?v=rXINBAWxJ94",
-    "9": u"https://www.youtube.com/watch?v=o7sZWSVH37g",
-    "10": u"https://www.youtube.com/watch?v=CFM_zypYFHM",
-    "11": u"https://www.youtube.com/watch?v=LzC0HSOOauI",
-    "12": u"https://www.youtube.com/watch?v=eS0hCgXMnT4",
-    "13": u"https://www.youtube.com/watch?v=hJgJTTIbMDI",
-    "14": u"https://www.youtube.com/watch?v=z7QgUzPHkBA",
-    "15": u"https://www.youtube.com/watch?v=fCQufN8Wsgc",
-    "16": u"https://www.youtube.com/watch?v=cZsj0dTTmy8",
-    "17": u"https://www.youtube.com/watch?v=1apeGd4cinU",
-    "18": u"https://www.youtube.com/watch?v=jJHDDYd6PrM",
-    "19": u"https://www.youtube.com/watch?v=fsWF5Ek_RiI",
-    "20": u"https://www.youtube.com/watch?v=yJXUuu2lF7s",
-    "21": u"https://www.youtube.com/watch?v=t7xHamn5inQ",
-    "22": u"https://www.youtube.com/watch?v=PwVT67T5Xt4",
-    "23": u"https://www.youtube.com/watch?v=hBi9wavp2w4",
-    "24": u"https://www.youtube.com/watch?v=MSXr7O0hu-c"
-
-}
+from Variables import *
 
 
 class Music(commands.Cog):
@@ -107,7 +69,7 @@ class Music(commands.Cog):
     @commands.command(name="stop", pass_ctx=True)
     async def stop_playing(self, ctx: discord.ext.commands.context.Context):
         voice = self.get_voice(ctx)
-        await voice.stop()
+        voice.stop()
 
     def is_playing(self, ctx: discord.ext.commands.context.Context):
         voice = self.get_voice(ctx)
@@ -130,26 +92,38 @@ class Music(commands.Cog):
         with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
             info = ydl.extract_info(url, download=False)
             url2 = info['formats'][0]['url']
+            print(url2)
             source = await discord.FFmpegOpusAudio.from_probe(url2, **FFMPEG_OPTIONS)
         return source
 
     async def get_first_in_q(self, ctx: discord.ext.commands.context.Context):
         if self.check_q():
             source = await self.get_audio(self.queue.pop(0))
-            ctx.voice_client.play(source)
+            return source
 
     async def play_q(self, ctx: discord.ext.commands.context.Context):
         while len(self.queue) > 0:
             if self.is_playing(ctx):
                 time.sleep(1)
             else:
+                await self.stop_playing(ctx)
                 time.sleep(3)
-                print("playing the queue")
-                self.stop_playing(ctx)
                 ctx.voice_client.play(await self.get_first_in_q(ctx))
 
     @commands.command(name="play", pass_ctx=True)
-    async def play(self, ctx: discord.ext.commands.context.Context, url=""):
+    async def play(self, ctx: discord.ext.commands.context.Context, url="", queue=False):
+        """
+        every song I command playing enters a queue and the command actually plays the next song in queue,
+        no matter if the queue is empty or not.
+        in the end I will add the next condition
+
+        `if len(self.queue) > 0:
+            await self.play(ctx, self.queue.pop(0), queued=True)`
+
+        which will recurse the function until the queue is empty.
+        now all I need is to make the bot wait for the current song to finish playing and while it waits it needs to
+        be able to receive commands too.
+        """
         await self.handle_connected(ctx)
         if self.is_playing(ctx):
             await self.handle_queue(ctx, url)
@@ -158,7 +132,11 @@ class Music(commands.Cog):
         else:
             vc = ctx.voice_client
             source = await self.get_audio(url)
-            vc.play(source)
+            if self.is_playing(ctx):
+                time.sleep(1)
+                await self.play(ctx, url)
+            else:
+                vc.play(source)
             return True
 
     @commands.command(name="oklesgo", pass_ctx=True)
