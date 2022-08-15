@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import youtube_dl
+import time
 
 FFMPEG_OPTIONS = {
             'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
@@ -9,6 +10,9 @@ FFMPEG_OPTIONS = {
 YDL_OPTIONS = {'format': 'bestaudio'}
 
 OK = "https://www.youtube.com/watch?v=GD9QURJd6qA&ab_channel=SvenBalthazard"
+
+t1 = u'https://www.youtube.com/watch?v=rfT6IhY_eUM&ab_channel=SLOplayz'
+t2 = u'https://www.youtube.com/watch?v=MU_ZhdCy9-8&ab_channel=AnimeKURO'
 
 OPS = {
     "1": u"https://www.youtube.com/watch?v=HRaoYuRKBaA",
@@ -43,9 +47,12 @@ class Music(commands.Cog):
 
     # todo: Add queue function, skipping function
 
-    def __init__(self, client):
+    def __init__(self, client: commands.Bot):
         self.client = client
         self.queue = []
+
+    def check_q(self):
+        return len(self.queue) > 0
 
     @commands.command(name="join", pass_ctx=True)
     async def join(self, ctx):
@@ -70,10 +77,20 @@ class Music(commands.Cog):
     async def disconnect(self, ctx):
         await ctx.voice_client.disconnect()
 
+    @commands.command(name='t1', pass_ctx=True)
+    async def t1(self, ctx: discord.ext.commands.context.Context):
+        await self.play(ctx, t1)
+
+    @commands.command(name='t2', pass_ctx=True)
+    async def t2(self, ctx: discord.ext.commands.context.Context):
+        await self.play(ctx, t2)
+
     @commands.command(name="op", pass_ctx=True)
     async def op(self, ctx, num):
         try:
             int(num)
+            if int(num) > 24 or int(num) < 1:
+                raise ValueError
             playing = await self.play(ctx, OPS[num])
             if playing:
                 await ctx.send("Playing %s." % ("op %s" % num))
@@ -84,40 +101,64 @@ class Music(commands.Cog):
                 # todo: play all openings shuffled
                 pass
 
-    @staticmethod
-    def is_playing(ctx: discord.ext.commands.context.Context):
-        print("Bot is playing: %s" % ctx.voice_client.is_playing())
-        return ctx.voice_client.is_playing()
+    def get_voice(self, ctx: discord.ext.commands.context.Context):
+        return discord.utils.get(self.client.voice_clients, guild=ctx.guild)
+
+    @commands.command(name="stop", pass_ctx=True)
+    async def stop_playing(self, ctx: discord.ext.commands.context.Context):
+        voice = self.get_voice(ctx)
+        await voice.stop()
+
+    def is_playing(self, ctx: discord.ext.commands.context.Context):
+        voice = self.get_voice(ctx)
+        return voice.is_playing()
 
     def add_to_queue(self, url):
         self.queue.append(url)
 
-    async def handle_connected(self, ctx: discord.ext.commands.context.Context, url):
+    async def handle_connected(self, ctx: discord.ext.commands.context.Context):
         if not self.is_connected(ctx):
             await ctx.send("Joining channel.")
             await self.join(ctx)
-        else:
-            # todo: check id is playing and if so add to queue
-            if self.is_playing(ctx):
-                self.add_to_queue(url)
+
+    async def handle_queue(self, ctx: discord.ext.commands.context.Context, url):
+        await ctx.send("Added song to the queue.")
+        self.add_to_queue(url)
 
     @staticmethod
-    async def handle_queue(ctx: discord.ext.commands.context.Context):
-        await ctx.send("Added song to the queue.")
+    async def get_audio(url):
+        with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
+            info = ydl.extract_info(url, download=False)
+            url2 = info['formats'][0]['url']
+            source = await discord.FFmpegOpusAudio.from_probe(url2, **FFMPEG_OPTIONS)
+        return source
+
+    async def get_first_in_q(self, ctx: discord.ext.commands.context.Context):
+        if self.check_q():
+            source = await self.get_audio(self.queue.pop(0))
+            ctx.voice_client.play(source)
+
+    async def play_q(self, ctx: discord.ext.commands.context.Context):
+        while len(self.queue) > 0:
+            if self.is_playing(ctx):
+                time.sleep(1)
+            else:
+                time.sleep(3)
+                print("playing the queue")
+                self.stop_playing(ctx)
+                ctx.voice_client.play(await self.get_first_in_q(ctx))
 
     @commands.command(name="play", pass_ctx=True)
     async def play(self, ctx: discord.ext.commands.context.Context, url=""):
-        await self.handle_connected(ctx, url)
-        if len(self.queue) > 0:
-            await self.handle_queue(ctx)
+        await self.handle_connected(ctx)
+        if self.is_playing(ctx):
+            await self.handle_queue(ctx, url)
+            await self.play_q(ctx)
             return False
         else:
             vc = ctx.voice_client
-            with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
-                info = ydl.extract_info(url, download=False)
-                url2 = info['formats'][0]['url']
-                source = await discord.FFmpegOpusAudio.from_probe(url2, **FFMPEG_OPTIONS)
-                vc.play(source)
+            source = await self.get_audio(url)
+            vc.play(source)
             return True
 
     @commands.command(name="oklesgo", pass_ctx=True)
@@ -126,18 +167,24 @@ class Music(commands.Cog):
         await ctx.send("Ok, Let's goo")
 
     @commands.command(name="pause", pass_ctx=True)
-    async def pause(self, ctx):
+    async def pause(self, ctx: discord.ext.commands.context.Context):
         try:
-            await ctx.voice_client.pause()
-            await ctx.send("Ok, pausing.")
+            if self.is_playing(ctx):
+                await ctx.voice_client.pause()
+                await ctx.send("Ok, pausing.")
+            else:
+                await ctx.send("Not playing anything.")
         except TypeError:
             pass
 
     @commands.command(name="resume", pass_ctx=True)
     async def resume(self, ctx):
         try:
-            await ctx.voice_client.resume()
-            await ctx.send("Ok, resuming.")
+            if not self.is_playing(ctx):
+                await ctx.voice_client.resume()
+                await ctx.send("Ok, resuming.")
+            else:
+                await ctx.send("Nothing is paused.")
         except TypeError:
             pass
 
