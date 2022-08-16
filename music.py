@@ -17,6 +17,8 @@ class Music(commands.Cog):
             - skipping function,
             v stop clears queue,
             V "?op all" plays all openings shuffled
+            - help command
+            - manually adding commands
     """
 
     def __init__(self, client: commands.Bot):
