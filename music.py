@@ -5,6 +5,7 @@ import time
 from Variables import *
 import threading
 import asyncio
+import random
 
 
 class Music(commands.Cog):
@@ -14,7 +15,8 @@ class Music(commands.Cog):
             v queue function
             - searching music via youtube (make it show the top 5 results),
             - skipping function,
-            v stop clears queue
+            v stop clears queue,
+            V "?op all" plays all openings shuffled
     """
 
     def __init__(self, client: commands.Bot):
@@ -113,6 +115,16 @@ class Music(commands.Cog):
     async def t2(self, ctx: discord.ext.commands.context.Context):
         await self.play(ctx, t2)
 
+    @staticmethod
+    def get_shuffled_ops():
+        ops_list = [str(i) for i in range(1, 25)]
+        random.shuffle(ops_list)
+        return ops_list
+
+    def add_ops_to_queue(self, shuffled_list):
+        for i in range(len(shuffled_list)):
+            self.queue.append(OPS[shuffled_list[i]])
+
     @commands.command(name="op", pass_ctx=True)
     async def op(self, ctx, num):
         try:
@@ -126,8 +138,11 @@ class Music(commands.Cog):
             if num != "all":
                 await ctx.send("Bad argument %s!" % num)
             else:
-                # todo: play all openings shuffled
-                pass
+                ops_shuffled = self.get_shuffled_ops()
+                self.add_ops_to_queue(ops_shuffled)
+                first_in_q = OPS[ops_shuffled.pop(0)]
+                print(f"this is the list: {ops_shuffled}\n{first_in_q}\n\n\n")
+                await self.play(ctx, first_in_q)
 
     def get_voice(self, ctx: discord.ext.commands.context.Context):
         return discord.utils.get(self.client.voice_clients, guild=ctx.guild)
