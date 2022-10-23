@@ -1,3 +1,5 @@
+import re
+
 FFMPEG_OPTIONS = {
             'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
             'options': '-vn'
@@ -36,3 +38,8 @@ OPS = {
     "24": u"https://www.youtube.com/watch?v=MSXr7O0hu-c"
 
 }
+# /watch?v=G75KfgmTXSs
+YT_URL_FORMAT = r"watch\?v=(\S{11})"
+YT_TITLE_RANGE = r"{}(.*)/watch\?v={}"
+YT_TITLE_TEXT_RANGE = r'"text":"(.*)"}],"accessibility"'
+YT_SEARCH = "https://www.youtube.com/results?search_query={}"
