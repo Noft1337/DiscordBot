@@ -43,3 +43,4 @@ YT_URL_FORMAT = r"watch\?v=(\S{11})"
 YT_TITLE_RANGE = r"{}(.*)/watch\?v={}"
 YT_TITLE_TEXT_RANGE = r'"text":"(.*)"}],"accessibility"'
 YT_SEARCH = "https://www.youtube.com/results?search_query={}"
+YT_URL = "https://www.youtube.com/watch?v={}"
