@@ -16,6 +16,7 @@ def get_raw_page(query: str):
     else:
         query = url_encode_string(query)
     link = YT_SEARCH.format(query)
+    print("Searching %s on YT, link: %s" % (query, link))
     return urllib.request.urlopen(link).read().decode()
 
 
@@ -29,7 +30,7 @@ def remove_dupes_from_list(li: list):
 
 def get_urls(page_content: str):
     video_urls = remove_dupes_from_list(re.findall(YT_URL_FORMAT, page_content))
-    return video_urls[:7]
+    return video_urls[:5]
 
 
 def purify_title_from_raw(raw_content: str):
@@ -52,12 +53,16 @@ def sanitize_title(title: str):
     return sanitized
 
 
+def get_title_from_link(page_content: str, url):
+    content = re.search(YT_TITLE_RANGE.format(url, url), page_content).group(1)
+    title = purify_title_from_raw(content)
+    return sanitize_title(title)
+
+
 def get_titles(page_content: str, list_of_urls: list):
     titles = []
     for i in list_of_urls:
-        content = re.search(YT_TITLE_RANGE.format(i, i), page_content).group(1)
-        title = purify_title_from_raw(content)
-        sanitized_title = sanitize_title(title)
+        sanitized_title = get_title_from_link(page_content, i)
         titles.append(sanitized_title)
     return titles
 
@@ -78,6 +83,5 @@ def get_first_five_yts(query: str):
     titles = get_titles(all_content, urls)
     data = format_data(urls, titles)
     print(data)
+    return data
 
-
-get_first_five_yts('abc')

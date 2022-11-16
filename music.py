@@ -2,10 +2,15 @@ import discord
 from discord.ext import commands
 import youtube_dl
 import time
+import youtube_search
 from Variables import *
 import threading
 import asyncio
 import random
+import urllib.parse
+import urllib.request
+import socket
+import urllib.error
 
 
 class Music(commands.Cog):
@@ -25,6 +30,7 @@ class Music(commands.Cog):
         self.client = client
         self.queue = []
         self.thread = False
+        self.yt_search = {}
 
     def check_q(self):
         return len(self.queue) > 0
@@ -67,16 +73,53 @@ class Music(commands.Cog):
             playing_t = threading.Thread(target=self.wait_for_idle, name="Song_Listener", args=[ctx])
             playing_t.start()
 
+    @staticmethod
+    def is_yt_link(query: str):
+        # True if is a link
+        if 'youtube.com' or 'youtu.be' in query:
+            if not query.startswith('https://'):
+                query = 'https://' + query
+            try:
+                urllib.request.urlopen(query)
+                return True
+            except (ValueError, socket.gaierror, urllib.error.URLError):
+                return False
+
+    @staticmethod
+    def simplify_query(query):
+        query = urllib.parse.unquote(query)
+        char_i = query.find('&')
+        if char_i != -1:
+            query = query[:char_i]
+        return query
+
     @commands.command(name="play", pass_ctx=True)
     async def play(self, ctx: discord.ext.commands.context.Context, url=""):
+        url = self.simplify_query(url)
         await self.handle_connected(ctx)
-        self.queue.append(url)
-        print(self.queue, self.is_playing(ctx))
 
-        # send a message to inform that a song has been queued or being played
-        await self.send_playing(ctx)
-        if not self.thread:
-            await self.play_queue(ctx)
+        if self.is_yt_link(url):
+            self.queue.append(url)
+            print(self.queue, self.is_playing(ctx))
+
+            # send a message to inform that a song has been queued or being played
+            await self.send_playing(ctx)
+            if not self.thread:
+                await self.play_queue(ctx)
+        else:
+            if not self.yt_search:
+                self.yt_search = youtube_search.get_first_five_yts(url)
+                await self.send_yt_search(ctx)
+            else:
+                try:
+                    url = int(url)
+                    if 1 <= url <= 5:
+                        await self.play(ctx, self.yt_search[url]["url"])
+                        self.yt_search = {}
+                    else:
+                        await self.invalid_pick(ctx)
+                except ValueError:
+                    await self.invalid_pick(ctx)
 
     @commands.command(name="oklesgo", pass_ctx=True)
     async def oklesgo(self, ctx: discord.ext.commands.context.Context):
@@ -99,9 +142,6 @@ class Music(commands.Cog):
         try:
             if not self.is_playing(ctx):
                 await ctx.voice_client.resume()
-                await ctx.send("Ok, resuming.")
-            else:
-                await ctx.send("Nothing is paused.")
         except TypeError:
             pass
 
@@ -174,11 +214,20 @@ class Music(commands.Cog):
 
     async def handle_connected(self, ctx: discord.ext.commands.context.Context):
         if not self.is_connected(ctx):
-            await ctx.send("Joining channel.")
             await self.join(ctx)
 
     async def send_playing(self, ctx: discord.ext.commands.context.Context):
         await ctx.send("Added to queue.") if self.is_playing(ctx) else await ctx.send("The song will be played now")
+
+    @staticmethod
+    async def invalid_pick(ctx: discord.ext.commands.context.Context):
+        await ctx.send("Invalid pick.")
+
+    async def send_yt_search(self, ctx: discord.ext.commands.context.Context):
+        search_result = ''
+        for i in range(1, 6):
+            search_result += '%d: %s\n' % (i, self.yt_search[i]["title"])
+        await ctx.send(search_result)
 
 
 def setup(client):
