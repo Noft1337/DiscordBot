@@ -2,7 +2,6 @@ import codecs
 import urllib.request
 import re
 import urllib.parse
-import unicodedata
 from Variables import *
 
 

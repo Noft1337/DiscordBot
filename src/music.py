@@ -76,7 +76,7 @@ class Music(commands.Cog):
     @staticmethod
     def is_yt_link(query: str):
         # True if is a link
-        if 'youtube.com' or 'youtu.be' in query:
+        if ('youtube.com' or 'youtu.be') in query:
             if not query.startswith('https://'):
                 query = 'https://' + query
             try:
@@ -86,16 +86,22 @@ class Music(commands.Cog):
                 return False
 
     @staticmethod
-    def simplify_query(query):
-        query = urllib.parse.unquote(query)
-        char_i = query.find('&')
+    def filter_query(query: str):
+        filtered_query = urllib.parse.unquote(' '.join(query.split()[1:]))
+        return filtered_query
+
+    def simplify_query(self, query):
+        new_query = self.filter_query(query)
+        char_i = new_query.find('&')
         if char_i != -1:
-            query = query[:char_i]
-        return query
+            new_query = new_query[:char_i]
+        return new_query
 
     @commands.command(name="play", pass_ctx=True)
     async def play(self, ctx: discord.ext.commands.context.Context, url=""):
-        url = self.simplify_query(url)
+        print(f"[*] - Play query received for: {url}")
+        query = ctx.message.clean_content
+        url = self.simplify_query(query)
         await self.handle_connected(ctx)
 
         if self.is_yt_link(url):
@@ -120,6 +126,10 @@ class Music(commands.Cog):
                         await self.invalid_pick(ctx)
                 except ValueError:
                     await self.invalid_pick(ctx)
+
+    @commands.command(name="spotify", pass_ctx=True)
+    async def spotify(self, ctx: discord.ext.commands.context.Context):
+        pass
 
     @commands.command(name="oklesgo", pass_ctx=True)
     async def oklesgo(self, ctx: discord.ext.commands.context.Context):
